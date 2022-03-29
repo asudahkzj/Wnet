@@ -49,7 +49,7 @@ def get_args_parser():
                         help='gradient clipping max norm')
 
     # Model parameters
-    parser.add_argument('--model_path', type=str, default='a2d_rvos_dwt0008_soft_box105_text/checkpoint0000.pth',
+    parser.add_argument('--model_path', type=str, default='output/checkpoint.pth',
                         help="Path to the model weights.")
     # * Backbone
     parser.add_argument('--backbone', default='resnet50', type=str,
@@ -101,19 +101,18 @@ def get_args_parser():
     parser.add_argument('--dice_loss_coef', default=1, type=float)
     parser.add_argument('--bbox_loss_coef', default=5, type=float)
     parser.add_argument('--giou_loss_coef', default=2, type=float)
-    parser.add_argument('--eos_coef', default=0.1, type=float,
-                        help="Relative classification weight of the no-object class")
+    parser.add_argument('--kl_loss_coef', default=500, type=float)
 
     # dataset parameters
-    parser.add_argument('--img_path', default='data/rvos/train/JPEGImages/')
-    parser.add_argument('--ann_path', default='data/rvos/ann/instances_test_sub.json')
-    parser.add_argument('--save_path', default='results/results_rvos_a2d_0000.json')
-    parser.add_argument('--dataset_file', default='ytvos')
+    parser.add_argument('--img_path', type=str)
+    parser.add_argument('--ann_path', type=str)
+    parser.add_argument('--save_path', default='result.json')
+    parser.add_argument('--dataset_file', default='a2d')
     parser.add_argument('--coco_path', type=str)
     parser.add_argument('--coco_panoptic_path', type=str)
     parser.add_argument('--remove_difficult', action='store_true')
 
-    parser.add_argument('--output_dir', default='output_ytvos',
+    parser.add_argument('--output_dir', type=str,
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -222,8 +221,6 @@ def main(args):
         
         iou = 0
         fb = 0
-        p = 0
-        r = 0
         print('test:', len(test_samples))
         for i in range(len(test_samples)):
             video_id, instance_id, frame_idx, query = test_samples[i]
