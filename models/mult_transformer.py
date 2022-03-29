@@ -175,7 +175,7 @@ class MultTransformerEncoderLayer(nn.Module):
             for i in range(3):
                 dwt_sign = wh_list[j][i].sign()
                 w_abs = wh_list[j][i].abs()
-                ts = (0.006 * (w_abs.max())).data
+                ts = (0.008 * (w_abs.max())).data
                 dwt_mask = (w_abs < ts)
                 # num = dwt_mask.sum()
                 w_abs = w_abs - ts
