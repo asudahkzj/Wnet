@@ -56,3 +56,13 @@ For RVOS:
 python inference_rvos.py --masks --model_path /path/to/model_weights --save_path /path/to/results.json
 ```
 In a similar way for A2D-Sentences and JHMDB-Sentences.
+
+
+## Models
+
+We provide Wnet models trained from the AVOS dataset, which contains the videos of RVOS, A2D-Sentences and JHMDB-Sentences.
+
+
+|Name| Backbone      | J | F  | J&F | Chenkpoint
+|:---:| :-----------: | :-----------: | :-----------: | :---: | :---: |
+|Wnet|R50|43.0|45.0|44.0| [Link](https://1drv.ms/u/s!Ak4bpr3_F0KQakQ2gA_2DQ8nDhI?e=iJ3cDP)        |
