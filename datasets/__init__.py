@@ -4,6 +4,7 @@ import torchvision
 from .coco import build as build_coco
 from .ytvos import build as build_ytvos
 from .avos import build as build_avos
+from .a2d import build as build_a2d
 
 def get_coco_api_from_dataset(dataset):
     for _ in range(10):
@@ -26,4 +27,6 @@ def build_dataset(image_set, args):
         return build_ytvos(image_set, args)
     if args.dataset_file == 'avos':
         return build_avos(image_set, args)
+    if args.dataset_file == 'a2d':
+        return build_a2d(image_set, args)
     raise ValueError(f'dataset {args.dataset_file} not supported')

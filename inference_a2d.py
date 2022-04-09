@@ -15,26 +15,18 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 import datasets
 import util.misc as utils
-from datasets import build_dataset, get_coco_api_from_dataset
-from engine import evaluate, train_one_epoch
 from models import build_model
 import torchvision.transforms as T
 import matplotlib.pyplot as plt
 import os
 from PIL import Image
-import math
 import torch.nn.functional as F
 import json
-from scipy.optimize import linear_sum_assignment
-import pycocotools.mask as mask_util
-import yaml
 import numpy as np
 import csv
 import h5py
 from evaluate.jaccard import db_eval_iou
 from evaluate.f_boundary import db_eval_boundary
-
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 
 def get_args_parser():
@@ -49,7 +41,7 @@ def get_args_parser():
                         help='gradient clipping max norm')
 
     # Model parameters
-    parser.add_argument('--model_path', type=str, default='output/checkpoint.pth',
+    parser.add_argument('--model_path', type=str, default="output/checkpoint.pth",
                         help="Path to the model weights.")
     # * Backbone
     parser.add_argument('--backbone', default='resnet50', type=str,
@@ -81,11 +73,9 @@ def get_args_parser():
     parser.add_argument('--pre_norm', action='store_true')
 
     # * Segmentation
-    # parser.add_argument('--masks', action='store_true',
-    #                     help="Train segmentation head if the flag is provided")
-    parser.add_argument('--masks', action='store_false',
+    parser.add_argument('--masks', action='store_true',
                         help="Train segmentation head if the flag is provided")
-
+                        
     # Loss
     parser.add_argument('--no_aux_loss', dest='aux_loss', action='store_false',
                         help="Disables auxiliary decoding losses (loss at each layer)")
@@ -130,12 +120,7 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
     return parser
 
-CLASSES=['person','giant_panda','lizard','parrot','skateboard','sedan','ape',
-         'dog','snake','monkey','hand','rabbit','duck','cat','cow','fish',
-         'train','horse','turtle','bear','motorbike','giraffe','leopard',
-         'fox','deer','owl','surfboard','airplane','truck','zebra','tiger',
-         'elephant','snowboard','boat','shark','mouse','frog','eagle','earless_seal',
-         'tennis_racket']
+
 COLORS = [[0.000, 0.447, 0.741], [0.850, 0.325, 0.098], [0.929, 0.694, 0.125],
           [0.494, 0.184, 0.556], [0.466, 0.674, 0.188], [0.301, 0.745, 0.933],
           [0.494, 0.000, 0.556], [0.494, 0.000, 0.000], [0.000, 0.745, 0.000],
@@ -184,7 +169,7 @@ def main(args):
         paths = {
             "videoset_path": "data/a2d/Release/videoset.csv",
             "annotation_path": "data/a2d/Release/Annotations",
-            "sample_path": "data/a2d/a2d_annotation2.txt",
+            "sample_path": "data/a2d/a2d_annotation_info.txt",
         }
         col_path = os.path.join(paths['annotation_path'], 'col')
         test_videos = {}
@@ -221,7 +206,7 @@ def main(args):
         
         iou = 0
         fb = 0
-        print('test:', len(test_samples))
+        print('Total num:', len(test_samples))
         for i in range(len(test_samples)):
             video_id, instance_id, frame_idx, query = test_samples[i]
             query = query.lower()
@@ -233,8 +218,9 @@ def main(args):
             frames = list(map(lambda x: os.path.join(frame_path, x), sorted(os.listdir(frame_path))))   
             assert len(frames) == test_videos[video_id]['num_frames']
             all_frames = []
-            for j in range(36):
-                all_frames.append(frame_idx-17+j)
+            mid_frame = (args.num_frames-1)//2
+            for j in range(args.num_frames):
+                all_frames.append(frame_idx-mid_frame+j)
             for j in range(len(all_frames)):
                 if all_frames[j] < 0:
                     all_frames[j] = 0
@@ -254,7 +240,7 @@ def main(args):
             audio = audio.to(device)
 
             outputs = model(img, audio)
-            masks = outputs['pred_masks'][0][17]
+            masks = outputs['pred_masks'][0][mid_frame]
             pred_masks =F.interpolate(masks.reshape(1,num_ins,masks.shape[-2],masks.shape[-1]),(im.size[1],im.size[0]),mode="bilinear").sigmoid().cpu().detach().numpy()>0.5
 
             with h5py.File(h5_path, mode='r') as fp:
@@ -275,14 +261,15 @@ def main(args):
                 fine_gt_mask = np.transpose(np.asarray(mask), (0, 2, 1))[0]
             
             single_iou = db_eval_iou(pred_masks[0][0], fine_gt_mask)
-            single_fb, single_p, single_r = db_eval_boundary(pred_masks[0][0], fine_gt_mask)
+            # single_fb, single_p, single_r = db_eval_boundary(pred_masks[0][0], fine_gt_mask)
+            single_fb, single_p, single_r = 0, 0, 0
             iou += single_iou
             fb += single_fb
-            if i % 30 == 0:
-                print('iou:', iou / (i+1), i)
-                print('boundary:', fb / (i+1), i)
-        print('---iou:', iou/len(test_samples))
-        print('---fb:', fb/len(test_samples))
+            if i % 50 == 0:
+                print(i+1, 'Jaccard:', iou / (i+1), ' F_boundary:', fb / (i+1))
+        print('Total num:', len(test_samples))
+        print('Jaccard:', iou/len(test_samples))
+        print('F_boundary:', fb/len(test_samples))
 
 
 if __name__ == '__main__':

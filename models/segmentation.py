@@ -89,17 +89,17 @@ class Wnetsegm(nn.Module):
             expressions = nested_tensor_from_exp(expressions)
         features, pos = self.wnet.backbone(samples)
         bs = features[-1].tensors.shape[0]
-        src, mask = features[-1].decompose()  # src:36*2048*10*15   mask:36*10*15
+        src, mask = features[-1].decompose()
         assert mask is not None
-        src_proj = self.wnet.input_proj(src) # 36*384*10*15
+        src_proj = self.wnet.input_proj(src)
         n,c,s_h,s_w = src_proj.shape
         bs_f = bs//self.wnet.num_frames
         src_proj = src_proj.reshape(bs_f, self.wnet.num_frames,c, s_h, s_w).permute(0,2,1,3,4).flatten(-2)  # 1*384*36*150
-        mask = mask.reshape(bs_f, self.wnet.num_frames, s_h*s_w)  # 1*36*150
-        pos = pos[-1].permute(0,2,1,3,4).flatten(-2)  # 1*384*36*150  bs*c*l*dim
+        mask = mask.reshape(bs_f, self.wnet.num_frames, s_h*s_w)
+        pos = pos[-1].permute(0,2,1,3,4).flatten(-2) 
 
         exp_tensor, exp_mask = expressions.decompose()
-        exp = self.wnet.proj_a(exp_tensor)  # 1*384*l
+        exp = self.wnet.proj_a(exp_tensor) 
 
         hs, memory, fusion = self.wnet.transformer(src_proj, mask, exp, self.wnet.query_embed.weight, pos, exp_mask)
 
@@ -133,7 +133,7 @@ class Wnetsegm(nn.Module):
             mask_ins = mask_ins.permute(0,2,1,3,4)
             outputs_seg_masks.append(self.insmask_head(mask_ins))
         outputs_seg_masks = torch.cat(outputs_seg_masks,1).squeeze(0).permute(1,0,2,3)  # 36*10*75*101
-        outputs_seg_masks = outputs_seg_masks.reshape(bs_f,36,outputs_seg_masks.size(-2),outputs_seg_masks.size(-1))
+        outputs_seg_masks = outputs_seg_masks.reshape(bs_f,self.wnet.num_frames,outputs_seg_masks.size(-2),outputs_seg_masks.size(-1))
         out["pred_masks"] = outputs_seg_masks
         return out
 

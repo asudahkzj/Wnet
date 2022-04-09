@@ -93,7 +93,7 @@ class Wnet(nn.Module):
 
 class SetCriterion(nn.Module):
     """ This class computes the loss for Wnet """
-    def __init__(self, weight_dict, losses):
+    def __init__(self, weight_dict, losses, num_frames):
         """ Create the criterion.
         Parameters:
             weight_dict: dict containing as key the names of the losses and as values their relative weight.
@@ -102,6 +102,7 @@ class SetCriterion(nn.Module):
         super().__init__()
         self.weight_dict = weight_dict
         self.losses = losses
+        self.num_frames = num_frames
 
     def loss_boxes(self, outputs, targets, indices, num_boxes):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
@@ -112,8 +113,8 @@ class SetCriterion(nn.Module):
         idx = self._get_src_permutation_idx(indices)
         # src_boxes = outputs['pred_boxes'][idx]
         src_boxes = outputs['pred_boxes']
-        if targets[0]['boxes'].shape[0] != 36:
-            src_boxes = src_boxes[:, 17, :].unsqueeze(1)
+        if targets[0]['boxes'].shape[0] != self.num_frames:
+            src_boxes = src_boxes[:, (self.num_frames-1)//2, :].unsqueeze(1)
         target_boxes = torch.cat([t['boxes'][i] for t, (_, i) in zip(targets, indices)], dim=0)
         src_boxes = src_boxes[idx]
 
@@ -140,8 +141,8 @@ class SetCriterion(nn.Module):
         src_masks = outputs["pred_masks"]
         # TODO use valid to mask invalid areas due to padding in loss
         target_masks, valid = nested_tensor_from_tensor_list([t["masks"] for t in targets], split=False).decompose()
-        if target_masks.shape[1] != 36:
-            src_masks = src_masks[:, 17, :, :].unsqueeze(1)
+        if target_masks.shape[1] != self.num_frames:
+            src_masks = src_masks[:, (self.num_frames-1)//2, :, :].unsqueeze(1)
         target_masks = target_masks.to(src_masks)
         src_masks = src_masks[src_idx]
         # upsample predictions to the target size
@@ -341,7 +342,7 @@ def build(args):
     losses = ['kl', 'boxes']
     if args.masks:
         losses += ["masks"]
-    criterion = SetCriterion(weight_dict=weight_dict, losses=losses)
+    criterion = SetCriterion(weight_dict=weight_dict, losses=losses, num_frames=args.num_frames)
     criterion.to(device)
     postprocessors = {'bbox': PostProcess()}
     if args.masks:

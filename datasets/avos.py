@@ -27,17 +27,17 @@ class AVOSDataset:
         self.img_folder = img_folder
         self.mask_folder = mask_folder
         self.ann_file = ann_file
-        self.exp_file = exp_file  # 表达 
-        self.audio_ytvos = 'data/audio_feature'
+        self.exp_file = exp_file
+        self.audio_ytvos = 'data/rvos_audio_feature'
         self._transforms = transforms
         self.return_masks = return_masks
         self.num_frames = num_frames
         self.prepare = ConvertCocoPolysToMask(return_masks)
         self.ytvos = YTVOS(ann_file)
-        # self.cat_ids = self.ytvos.getCatIds()  # 0~40
-        self.vid_ids = self.ytvos.getVidIds()  # 1~2238
+        # self.cat_ids = self.ytvos.getCatIds() 
+        self.vid_ids = self.ytvos.getVidIds() 
         self.vid_infos = []
-        self.exp_infos = load_expressions(exp_file)  # 表达
+        self.exp_infos = load_expressions(exp_file)
         for i in self.vid_ids:
             info = self.ytvos.loadVids([i])[0]
             info['filenames'] = info['file_names']
@@ -120,8 +120,9 @@ class AVOSDataset:
             assert len(frames) == self.videos[video_id]['num_frames']
 
             all_frames = []
-            for i in range(36):
-                all_frames.append(frame_idx-17+i)
+            mid_frame = (self.num_frames-1)//2
+            for i in range(self.num_frames):
+                all_frames.append(frame_idx-mid_frame+i)
             for i in range(len(all_frames)):
                 if all_frames[i] < 0:
                     all_frames[i] = 0
@@ -217,18 +218,14 @@ class AVOSDataset:
         self.all_query = set()
         with open(self.paths['sample_path'], newline='') as fp:
             reader = csv.DictReader(fp)
-            from collections import defaultdict
-            video2frame = defaultdict(list)
             rows = []
             for row in reader:
                 rows.append(row)
-                video2frame[(row['video_id'], row['query'])].append(row['frame_idx'])
             for row in rows:
                 if row['video_id'] in self.train_videos:
-                    self.train_samples.append([row['video_id'], row['instance_id'], row['frame_idx'], row['query']])
+                    self.train_samples.append([row['video_id'], row['instance_id'], row['frame_idx'], 1])
                     self.train_videos_set.add(row['video_id'])
                 else:
-                    l = video2frame[(row['video_id'], row['query'])]
                     # if l[len(l) >> 1] != row['frame_idx']:
                     #     continue
                     self.test_samples.append([row['video_id'], row['instance_id'], row['frame_idx'], 1])
@@ -388,7 +385,7 @@ def build(image_set, args):
     paths = {
         "videoset_path": "data/a2d/Release/videoset.csv",
         "annotation_path": "data/a2d/Release/Annotations",
-        "sample_path": "data/a2d/a2d_annotation2.txt",
+        "sample_path": "data/a2d/a2d_annotation_info.txt",
     }
 
     dataset = AVOSDataset(paths, img_folder, mask_folder, ann_file, exp_file, transforms=make_coco_transforms(image_set), return_masks=args.masks, num_frames = args.num_frames)

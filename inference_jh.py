@@ -3,8 +3,10 @@ Inference code for Wnet
 Modified from DETR (https://github.com/facebookresearch/detr)
 '''
 import argparse
+import datetime
 import json
 import random
+import time
 from pathlib import Path
 
 import numpy as np
@@ -13,8 +15,6 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 import datasets
 import util.misc as utils
-from datasets import build_dataset, get_coco_api_from_dataset
-from engine import evaluate, train_one_epoch
 from models import build_model
 import torchvision.transforms as T
 import matplotlib.pyplot as plt
@@ -23,9 +23,12 @@ from PIL import Image
 import math
 import torch.nn.functional as F
 import json
-from scipy.optimize import linear_sum_assignment
-import pycocotools.mask as mask_util
+import numpy as np
 
+from evaluate.jaccard import db_eval_iou
+from evaluate.f_boundary import db_eval_boundary
+import scipy.io as scio
+import csv
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
@@ -39,7 +42,7 @@ def get_args_parser():
                         help='gradient clipping max norm')
 
     # Model parameters
-    parser.add_argument('--model_path', type=str, default='output/checkpoint.pth',
+    parser.add_argument('--model_path', type=str, default="output/checkpoint.pth",
                         help="Path to the model weights.")
     # * Backbone
     parser.add_argument('--backbone', default='resnet50', type=str,
@@ -77,7 +80,13 @@ def get_args_parser():
     # Loss
     parser.add_argument('--no_aux_loss', dest='aux_loss', action='store_false',
                         help="Disables auxiliary decoding losses (loss at each layer)")
-
+    # * Matcher
+    parser.add_argument('--set_cost_class', default=1, type=float,
+                        help="Class coefficient in the matching cost")
+    parser.add_argument('--set_cost_bbox', default=5, type=float,
+                        help="L1 box coefficient in the matching cost")
+    parser.add_argument('--set_cost_giou', default=2, type=float,
+                        help="giou box coefficient in the matching cost")
     # * Loss coefficients
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
@@ -86,15 +95,15 @@ def get_args_parser():
     parser.add_argument('--kl_loss_coef', default=500, type=float)
 
     # dataset parameters
-    parser.add_argument('--img_path', default='data/rvos/train/JPEGImages/')
-    parser.add_argument('--ann_path', default='data/rvos/ann/instances_test_sub.json')
+    parser.add_argument('--img_path', type=str)
+    parser.add_argument('--ann_path', type=str)
     parser.add_argument('--save_path', default='result.json')
-    parser.add_argument('--dataset_file', default='ytvos')
+    parser.add_argument('--dataset_file', default='jh')
     parser.add_argument('--coco_path', type=str)
     parser.add_argument('--coco_panoptic_path', type=str)
     parser.add_argument('--remove_difficult', action='store_true')
 
-    parser.add_argument('--output_dir', default='output_ytvos',
+    parser.add_argument('--output_dir', type=str,
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -112,12 +121,7 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
     return parser
 
-CLASSES=['person','giant_panda','lizard','parrot','skateboard','sedan','ape',
-         'dog','snake','monkey','hand','rabbit','duck','cat','cow','fish',
-         'train','horse','turtle','bear','motorbike','giraffe','leopard',
-         'fox','deer','owl','surfboard','airplane','truck','zebra','tiger',
-         'elephant','snowboard','boat','shark','mouse','frog','eagle','earless_seal',
-         'tennis_racket']
+
 COLORS = [[0.000, 0.447, 0.741], [0.850, 0.325, 0.098], [0.929, 0.694, 0.125],
           [0.494, 0.184, 0.556], [0.466, 0.674, 0.188], [0.301, 0.745, 0.933],
           [0.494, 0.000, 0.556], [0.494, 0.000, 0.000], [0.000, 0.745, 0.000],
@@ -159,67 +163,104 @@ def main(args):
     with torch.no_grad():
         model, criterion, postprocessors = build_model(args)
         model.to(device)
-        # print(model)
+
         state_dict = torch.load(args.model_path)['model']
         model.load_state_dict(state_dict)
-        folder = args.img_path
-        videos = json.load(open(args.ann_path,'rb'))['videos']
-        vis_num = len(videos)
-        expressions = json.load(open('data/rvos/meta_expressions/train/meta_expressions.json', 'r'))['videos']
-        result = [] 
-        for i in range(vis_num):
-            print("Process video: ",i)
-            id_ = videos[i]['id']
-            file_names = videos[i]['file_names']
-            length = len(file_names)
-            clip_num = math.ceil(length/num_frames)
-            
-            img_set=[]
-            if length<num_frames:
-                clip_names = file_names*(math.ceil(num_frames/length))
-                clip_names = clip_names[:num_frames]
-            else:
-                clip_names = file_names[:num_frames]
-            if len(clip_names)==0:
-                continue
-            if len(clip_names)<num_frames:
-                clip_names.extend(file_names[:num_frames-len(clip_names)])
-            for k in range(num_frames):
-                im = Image.open(os.path.join(folder,clip_names[k]))
+
+        with open('data/JHMDB/video_info.json', 'r') as fp:
+            video_info = json.load(fp)
+
+        ann_path = 'data/JHMDB/jhmdb_annotation.txt'
+        missings = ["32_Pull-ups_at_193IBS_pullup_f_cm_np1_ba_med_0", 
+                    "_Boom_Snap_Clap__challenge_clap_u_nm_np1_fr_med_1",
+                    "Boom_Snap_Clap_clap_u_nm_np1_fr_med_1",
+                    "_Boom_Snap_Clap__challenge_clap_u_nm_np1_fr_med_0",
+                    "32_Pull-ups_at_193IBS_pullup_f_cm_np1_ba_med_1",
+                    "Boom_Snap_Clap_clap_u_nm_np1_fr_med_0",
+                    ]
+        test_samples = []
+        with open(ann_path, newline='') as fp:
+            reader = csv.DictReader(fp)
+            for row in reader:
+                video = row['video_id']
+                if video in missings:
+                    continue
+                idx = np.linspace(4, len(video_info[video]['frames']) - 5, num=3,
+                                        endpoint=True).astype(np.int32)
+                idx = idx.astype(np.int64)
+                # print(video, idx, len(self.video_info[video[:-4]]['frames']))
+                for i in idx:
+                    test_samples.append((video, i))
+        
+        iou = 0
+        fb = 0
+        print('Total num:', len(test_samples))
+        for i in range(len(test_samples)):
+            video_id, frame_idx = test_samples[i]
+            frame_idx = int(frame_idx)
+            class_ = video_info[video_id]['class']
+
+            frame_path = os.path.join('data/JHMDB/Rename_Images/%s/%s' %
+                                    (class_, video_id))
+            need = []
+            for j in os.listdir(frame_path):
+                if j == '.AppleDouble' or j == '.DS_Store':
+                    continue
+                need.append(j)
+            frames = list(map(lambda x: os.path.join(frame_path, x),
+                            sorted(need, key=lambda x: int(x[:-4]))))
+
+            step = 1
+            all_frames = [i for i in range(frame_idx - 4 * step, frame_idx + 4 * step, step)]
+            all_frames = []
+            mid_frame = (args.num_frames-1)//2
+            for j in range(args.num_frames):
+                all_frames.append(frame_idx-mid_frame+j)
+            for j in range(len(all_frames)):
+                if all_frames[j] < 0:
+                    all_frames[j] = 0
+                elif all_frames[j] >= len(frames):
+                    all_frames[j] = len(frames) - 1
+            all_frames = np.asarray(frames)[all_frames]
+            img_set = []
+            for j in all_frames:
+                im = Image.open(j)
                 img_set.append(transform(im).unsqueeze(0).cuda())
-            # img=torch.cat(img_set,0)
+            img=torch.cat(img_set,0)
 
-            name = file_names[0].split('/')[0]
-            for k, v in expressions[name]['expressions'].items():
-                a_name = name + '_' + k + '.npy'
-                audio = np.load(os.path.join('data/rvos_audio_feature', a_name))
-                audio = audio.transpose()     
-                audio = torch.as_tensor(audio, dtype=torch.float32).unsqueeze(0)
-                audio = audio.to(device)
-                img=torch.cat(img_set,0)
-                obj_id = v['obj_id']
+            # audio
+            a_filename = video_id+'.npy'
+            audio = np.load(os.path.join('data/a2d_j_audio_feature', a_filename))
+            audio = audio.transpose()
+            audio = torch.as_tensor(audio, dtype=torch.float32).unsqueeze(0)
+            audio = audio.to(device)
 
-                # inference time is calculated for this operation
-                outputs = model(img, audio)
-                boxes, masks = outputs['pred_boxes'][0], outputs['pred_masks'][0]
-                pred_masks =F.interpolate(masks.reshape(num_frames,num_ins,masks.shape[-2],masks.shape[-1]),(im.size[1],im.size[0]),mode="bilinear").sigmoid().cpu().detach().numpy()>0.5
-                pred_masks = pred_masks[:length] 
-                for m in range(num_ins):
-                    if pred_masks[:,m].max()==0:
-                        continue
-                    instance = {'video_id':id_, 'obj_id':int(obj_id), 'file_name':name}
-                    segmentation = []
-                    for n in range(length):
-                        mask = (pred_masks[n,m]).astype(np.uint8) 
-                        rle = mask_util.encode(np.array(mask[:,:,np.newaxis], order='F'))[0]
-                        rle["counts"] = rle["counts"].decode("utf-8")
-                        segmentation.append(rle)
-                    instance['segmentations'] = segmentation
-                    result.append(instance)
-    with open(args.save_path, 'w', encoding='utf-8') as f:
-        json.dump(result,f)
+            outputs = model(img, audio)
+            masks = outputs['pred_masks'][0][mid_frame]
+            pred_masks =F.interpolate(masks.reshape(1,num_ins,masks.shape[-2],masks.shape[-1]),(im.size[1],im.size[0]),mode="bilinear").sigmoid().cpu().detach().numpy()>0.5
+
+            gt_path = 'data/JHMDB/puppet_mask/%s/%s/puppet_mask.mat' % (class_, video_id)
+            fine_gt_mask = scio.loadmat(gt_path)['part_mask']
+            try:
+                assert fine_gt_mask.shape[2] == len(frames)
+            except AssertionError:
+                if frame_idx >= fine_gt_mask.shape[2]:
+                    frame_idx = fine_gt_mask.shape[2] - 1
+                print(class_, video_id, fine_gt_mask.shape, len(frames))
+                # print(frames)
+                # exit(1)
+            fine_gt_mask = fine_gt_mask[:, :, frame_idx]
+            
+            single_iou = db_eval_iou(pred_masks[0][0], fine_gt_mask)
+            single_fb, single_p, single_r = db_eval_boundary(pred_masks[0][0], fine_gt_mask)
+            iou += single_iou
+            fb += single_fb
+            if i % 50 == 0:
+                print(i+1, 'Jaccard:', iou / (i+1), ' F_boundary:', fb / (i+1))
+        print('Total num:', len(test_samples))
+        print('Jaccard:', iou/len(test_samples))
+        print('F_boundary:', fb/len(test_samples))
                     
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Wnet inference script', parents=[get_args_parser()])

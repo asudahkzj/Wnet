@@ -27,7 +27,7 @@ def get_args_parser():
     parser.add_argument('--batch_size', default=1, type=int)
     parser.add_argument('--weight_decay', default=1e-4, type=float)
     parser.add_argument('--epochs', default=18, type=int)
-    parser.add_argument('--lr_drop', default=3, type=int) # 12
+    parser.add_argument('--lr_drop', default=12, type=int)
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
                         help='gradient clipping max norm')
 
@@ -72,8 +72,8 @@ def get_args_parser():
     # * Loss coefficients
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
-    parser.add_argument('--bbox_loss_coef', default=5, type=float)
-    parser.add_argument('--giou_loss_coef', default=2, type=float)
+    parser.add_argument('--bbox_loss_coef', default=7.5, type=float)
+    parser.add_argument('--giou_loss_coef', default=3, type=float)
     parser.add_argument('--kl_loss_coef', default=500, type=float)
 
     # dataset parameters

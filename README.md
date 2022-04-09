@@ -7,8 +7,7 @@ This is the official implementation of the Wnet paper:
 Audio-Guided video object segmentation is a challenging problem in visual analysis and editing, which automatically separates foreground objects from the background in a video sequence according to the referring audio expressions. However, the existing referring video object segmentation works mainly focus on the guidance of text-based referring expressions, due to the lack of modeling the semantic representations of audio-video interaction contents. In this paper, we consider the problem of audio-guided video semantic segmentation from the viewpoint of end-to-end denoising encoder-decoder network learning.  The extensive experiments show the effectiveness of our method.
 
 ## Installation
-We provide instructions how to install dependencies via conda.
-First, clone the repository locally:
+First, clone the repo locally:
 ```
 git clone https://github.com/asudahkzj/Wnet.git
 ```
@@ -38,25 +37,76 @@ python setup.py build_ext --inplace
 Download and extract 2021 version of Refer-Youtube-VOS train images from [RVOS](https://youtube-vos.org/dataset/rvos/). 
 Follow the instructions [here](https://kgavrilyuk.github.io/publication/actor_action/) to download A2D-Sentences and JHMDB-Sentences dataset.
 The new audio dataset (AVOS) is also [open](https://drive.google.com/drive/folders/1GcM3pt9pyt7pPjHPBaGi1nybniuSgbIg?usp=sharing).
+You need to extract MFCC features from audio files and convert video files in A2D into image frames. 
 
-Download the pretrained DETR models [Google Drive](https://drive.google.com/drive/folders/1DlN8uWHT2WaKruarGW2_XChhpZeI9MFG?usp=sharing) [BaiduYun](https://pan.baidu.com/s/12omUNDRjhAeGZ5olqQPpHA)(passcode:alge) on COCO and save it to the pretrained path.
+Then, organize the files as follows: 
 
+```text
+Wnet/data
+├── rvos/ 
+│   ├── ann/
+|   |   └── *.json (annotation files)  
+│   ├── train/
+|   │   ├── JPEGImages/
+|   │   └── Annotations/
+│   └── meta_expressions/train/meta_expressions.json
+├── a2d/
+|   ├── Release/
+|   │   ├── videoset.csv 
+|   │   ├── clips320/  
+|   │   └── pngs320/  (Image frames extracted from videos in clips320/)
+|   ├── a2d_annotation_with_instances/
+|   └── a2d_annotation_info.txt
+├── jhmdb/
+|   ├── Rename_Images/
+|   ├── puppet_mask/
+|   ├── jhmdb_annotation.txt
+|   └── video_info.json
+├── rvos_audio_feature/
+|   └── *.npy   (mfcc features extracted from rvos audio file)
+└── a2d_j_audio_feature/
+    └── *.npy   (mfcc features extracted from a2d/jhmdb audio file)
+```
+*The files a2d_annotation_info.txt and video_info.json can be downloaded [here](https://1drv.ms/u/s!Ak4bpr3_F0KQe0kFeZMYifC7ZoA?e=Ogw3GQ).
+
+Download the pretrained DETR models [OneDrive](https://1drv.ms/u/s!Ak4bpr3_F0KQclwyOviBLBMsT-A?e=VTfex6) on COCO and save it to the pretrained path.
 
 ## Training
-<!-- Training of the model requires at least 32g memory GPU, we performed the experiment on 32g V100 card. （As the training resolution is limited by the GPU memory, if you have a larger memory GPU and want to perform the experiment, please contact with me, thanks very much) -->
 
-For AVOS dataset, to train baseline Wnet on a single node with 4 gpus, run:
+For AVOS dataset (which contains the videos and audios of RVOS, A2D-Sentences and JHMDB-Sentences, and JHMDB-Sentences dataset is only for evaluation):
 ```
 python -m torch.distributed.launch --nproc_per_node=4 --use_env main.py --backbone resnet101/50 --dataset_file avos --ytvos_path /path/to/ytvos --masks --pretrained_weights /path/to/pretrained_path
 ```
+For RVOS dataset:
+```
+python -m torch.distributed.launch --nproc_per_node=4 --use_env main.py --backbone resnet101/50 --dataset_file ytvos --ytvos_path /path/to/ytvos --masks --pretrained_weights /path/to/pretrained_path
+```
+For A2D-Sentences dataset:
+```
+python -m torch.distributed.launch --nproc_per_node=4 --use_env main.py --backbone resnet101/50 --dataset_file a2d --num_frames 8 --num_queries 8 --masks --pretrained_weights /path/to/pretrained_path
+```
 
 ## Inference
-For RVOS:
+For AVOS dataset, we need to test three datasets separately: 
 ```
 python inference_rvos.py --masks --model_path /path/to/model_weights --save_path /path/to/results.json
+python evaluate/evaluate.py /path/to/results.json
+python inference_a2d.py --masks --model_path /path/to/model_weights
+python inference_jh.py --masks --model_path /path/to/model_weights
 ```
-In a similar way for A2D-Sentences and JHMDB-Sentences.
-
+For RVOS dataset:
+```
+python inference_rvos.py --masks --model_path /path/to/model_weights --save_path /path/to/results.json
+python evaluate/evaluate.py /path/to/results.json
+```
+For A2D-Sentences dataset:
+```
+python inference_a2d.py --masks --model_path /path/to/model_weights --num_frames 8 --num_queries 8
+```
+For JHMDB-Sentences dataset (directly using the model trained on A2D-Sentences):
+```
+python inference_jh.py --masks --model_path /path/to/model_weights --num_frames 8 --num_queries 8
+```
 
 ## Models
 

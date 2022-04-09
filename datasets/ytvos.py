@@ -24,17 +24,17 @@ class YTVOSDataset:
         self.img_folder = img_folder
         self.mask_folder = mask_folder
         self.ann_file = ann_file
-        self.exp_file = exp_file  # 表达 
-        self.audio_file = 'data/audio_feature'
+        self.exp_file = exp_file
+        self.audio_file = 'data/rvos_audio_feature'
         self._transforms = transforms
         self.return_masks = return_masks
         self.num_frames = num_frames
         self.prepare = ConvertCocoPolysToMask(return_masks)
         self.ytvos = YTVOS(ann_file)
-        # self.cat_ids = self.ytvos.getCatIds()  # 0~40
-        self.vid_ids = self.ytvos.getVidIds()  # 1~2238
+        # self.cat_ids = self.ytvos.getCatIds()
+        self.vid_ids = self.ytvos.getVidIds()
         self.vid_infos = []
-        self.exp_infos = load_expressions(exp_file)  # 表达
+        self.exp_infos = load_expressions(exp_file)
         for i in self.vid_ids:
             info = self.ytvos.loadVids([i])[0]
             info['filenames'] = info['file_names']
