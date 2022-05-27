@@ -27,6 +27,8 @@ conda install cython scipy
 pip install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
 pip install git+https://github.com/youtubevos/cocoapi.git#"egg=pycocotools&subdirectory=PythonAPI"
 ```
+If you encounter the problem of missing ytvos.py file, you can manually download the file from [here](https://github.com/youtubevos/cocoapi/tree/master/PythonAPI/pycocotools) and put it in the installed pycocotools folder.
+
 Compile DCN module(requires GCC>=5.3, cuda>=10.0)
 ```
 cd models/dcn
@@ -38,6 +40,7 @@ Download and extract 2021 version of Refer-Youtube-VOS train images from [RVOS](
 Follow the instructions [here](https://kgavrilyuk.github.io/publication/actor_action/) to download A2D-Sentences and JHMDB-Sentences dataset.
 The new audio dataset (AVOS) is also [open](https://drive.google.com/drive/folders/1GcM3pt9pyt7pPjHPBaGi1nybniuSgbIg?usp=sharing).
 You need to extract MFCC features from audio files and convert video files in A2D into image frames. 
+For extracting MFCC features, you can refer to [here](https://blog.csdn.net/chengtang2028/article/details/100837043).
 
 Then, organize the files as follows: 
 
@@ -54,7 +57,7 @@ Wnet/data
 |   ├── Release/
 |   │   ├── videoset.csv 
 |   │   ├── clips320/  
-|   │   └── pngs320/  (Image frames extracted from videos in clips320/)
+|   │   └── pngs320/  (image frames extracted from videos in clips320/)
 |   ├── a2d_annotation_with_instances/
 |   └── a2d_annotation_info.txt
 ├── jhmdb/
@@ -115,4 +118,4 @@ We provide Wnet models trained from the AVOS dataset, which contains the videos 
 
 |Name| Backbone      | J | F  | J&F | Chenkpoint
 |:---:| :-----------: | :-----------: | :-----------: | :---: | :---: |
-|Wnet|R50|43.0|45.0|44.0| [Link](https://1drv.ms/u/s!Ak4bpr3_F0KQakQ2gA_2DQ8nDhI?e=iJ3cDP)        |
+|Wnet|ResNet-50|43.0|45.0|44.0| [Link](https://1drv.ms/u/s!Ak4bpr3_F0KQakQ2gA_2DQ8nDhI?e=iJ3cDP)        |
