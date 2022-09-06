@@ -1,6 +1,6 @@
 ## Wnet: Audio-Guided Video Object Segmentation via Wavelet-Based Cross-Modal Denoising Networks
 
-This is the official implementation of the Wnet paper:
+This is the official implementation of the Wnet [paper](https://openaccess.thecvf.com/content/CVPR2022/html/Pan_Wnet_Audio-Guided_Video_Object_Segmentation_via_Wavelet-Based_Cross-Modal_Denoising_Networks_CVPR_2022_paper.html):
 
 
 ## Introduction
@@ -119,3 +119,18 @@ We provide Wnet models trained from the AVOS dataset, which contains the videos 
 |Name| Backbone      | J | F  | J&F | Chenkpoint
 |:---:| :-----------: | :-----------: | :-----------: | :---: | :---: |
 |Wnet|ResNet-50|43.0|45.0|44.0| [Link](https://1drv.ms/u/s!Ak4bpr3_F0KQakQ2gA_2DQ8nDhI?e=iJ3cDP)        |
+
+## Citation
+
+Please consider citing our work in your publications if the project helps your research:
+
+```
+@InProceedings{Pan_2022_CVPR, 
+  author = {Pan, Wenwen and Shi, Haonan and Zhao, Zhou and Zhu, Jieming and He, Xiuqiang and Pan, Zhigeng and Gao, Lianli and Yu, Jun and Wu, Fei and Tian, Qi}, 
+  title = {Wnet: Audio-Guided Video Object Segmentation via Wavelet-Based Cross-Modal Denoising Networks}, 
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 
+  month = {June}, 
+  year = {2022}, 
+  pages = {1320-1331} 
+}
+```
